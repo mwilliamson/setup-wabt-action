@@ -1,0 +1,9 @@
+name: 'Set up wabt'
+description: 'Set up a specific version of wabt and add the command-line tools to the PATH'
+inputs:
+  wabt-version:
+    description: 'The wabt version'
+    required: true
+runs:
+  using: 'node12'
+  main: 'dist/index.js'

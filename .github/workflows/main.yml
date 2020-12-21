@@ -1,0 +1,21 @@
+on: [push, pull_request]
+
+jobs:
+    build:
+        runs-on: ${{ matrix.os }}
+
+        strategy:
+            matrix:
+                wabt-version: ["1.0.20"]
+                os: [ubuntu-latest, macos-latest, windows-latest]
+
+        steps:
+
+        - uses: actions/checkout@v2
+
+        - name: Use wabt ${{ matrix.wabt-version }}
+          uses: ./
+          with:
+              wabt-version: ${{ matrix.wabt-version }}
+
+        - run: wat2wasm --help
