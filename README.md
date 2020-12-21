@@ -5,7 +5,7 @@ This actions adds the [wabt](https://github.com/WebAssembly/wabt) binaries to PA
 ## Usage
 
 ```yaml
-- name: Use wabt ${{ matrix.wabt-version }}
+- name: Use wabt 1.0.20
   uses: mwilliamson/setup-wabt-action@v1
   with:
     wabt-version: "1.0.20"
