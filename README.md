@@ -1,6 +1,6 @@
 # setup-wabt-action
 
-This actions adds the [wabt](https://github.com/WebAssembly/wabt) binaries to PATH.
+This action adds the [wabt](https://github.com/WebAssembly/wabt) binaries to PATH.
 
 ## Usage
 
