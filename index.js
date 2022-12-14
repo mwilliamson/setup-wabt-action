@@ -6,16 +6,19 @@ const github = require("@actions/github");
 const toolCache = require("@actions/tool-cache");
 
 function findArchive({version, nodePlatform}) {
-    const wabtPlatform = nodePlatformToWabtPlatform(nodePlatform);
+    const wabtPlatform = nodePlatformToWabtPlatform(version, nodePlatform);
     const directoryName = `wabt-${version}`;
 
     return [directoryName, `https://github.com/WebAssembly/wabt/releases/download/${version}/${directoryName}-${wabtPlatform}.tar.gz`]
 }
 
-function nodePlatformToWabtPlatform(nodePlatform) {
+function nodePlatformToWabtPlatform(version, nodePlatform) {
     switch (nodePlatform) {
         case "darwin":
-            return "macos-12";
+            versionPartsStr = version.split('.');
+            versionParts = versionPartsStr.map(function(item) {return Number(item);})
+            has12Extension = (versionParts.length === 3) && (versionParts[2] >= 30);
+            return has12Extension ? "macos-12" : "macos";
         case "linux":
             return "ubuntu";
         case "win32":
