@@ -6,7 +6,7 @@ This action adds the [wabt](https://github.com/WebAssembly/wabt) binaries to PAT
 
 ```yaml
 - name: Use wabt 1.0.20
-  uses: mwilliamson/setup-wabt-action@v1
+  uses: mwilliamson/setup-wabt-action@v2
   with:
     wabt-version: "1.0.20"
 ```
