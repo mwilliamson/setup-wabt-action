@@ -22,7 +22,8 @@
     "@actions/exec": "^1.0.4",
     "@actions/github": "^4.0.0",
     "@actions/tool-cache": "^1.6.1",
-    "@vercel/ncc": "^0.26.1"
+    "@vercel/ncc": "^0.26.1",
+    "semver": "^7.3.8"
   },
   "volta": {
     "node": "16.19.0",
