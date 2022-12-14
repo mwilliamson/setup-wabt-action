@@ -15,7 +15,7 @@ function findArchive({version, nodePlatform}) {
 function nodePlatformToWabtPlatform(nodePlatform) {
     switch (nodePlatform) {
         case "darwin":
-            return "macos";
+            return "macos-12";
         case "linux":
             return "ubuntu";
         case "win32":
