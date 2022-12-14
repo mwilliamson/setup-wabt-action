@@ -23,5 +23,9 @@
     "@actions/github": "^4.0.0",
     "@actions/tool-cache": "^1.6.1",
     "@vercel/ncc": "^0.26.1"
+  },
+  "volta": {
+    "node": "16.19.0",
+    "npm": "8.19.3"
   }
 }
