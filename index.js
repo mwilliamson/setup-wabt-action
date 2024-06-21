@@ -1,8 +1,6 @@
 const path = require("path");
 
 const core = require("@actions/core");
-const exec = require("@actions/exec");
-const github = require("@actions/github");
 const toolCache = require("@actions/tool-cache");
 const semver = require("semver");
 
