@@ -18,7 +18,7 @@ function nodePlatformToWabtPlatform({nodePlatform, version}) {
         case "darwin":
             return semver.gte(version, "1.0.30") ? "macos-12" : "macos";
         case "linux":
-            return "ubuntu";
+            return semver.gte(version, "1.0.35") ? "ubuntu-20.04" : "ubuntu";
         case "win32":
             return "windows";
         default:
