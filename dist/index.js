@@ -10,32 +10,42 @@ const path = __webpack_require__(5622);
 const core = __webpack_require__(2186);
 const toolCache = __webpack_require__(7784);
 const semver = __webpack_require__(1383);
+const platform = __webpack_require__(3492);
 
-function findArchive({version, nodePlatform}) {
-    const wabtPlatform = nodePlatformToWabtPlatform({nodePlatform, version});
+function findArchive({version, platformInfo}) {
+    const wabtPlatform = githubPlatformToWabtPlatform({platformInfo, version});
     const directoryName = `wabt-${version}`;
 
     return [directoryName, `https://github.com/WebAssembly/wabt/releases/download/${version}/${directoryName}-${wabtPlatform}.tar.gz`]
 }
 
-function nodePlatformToWabtPlatform({nodePlatform, version}) {
-    switch (nodePlatform) {
+function githubPlatformToWabtPlatform({platformInfo, version}) {
+    switch (platformInfo.platform) {
         case "darwin":
-            return semver.gte(version, "1.0.30") ? "macos-12" : "macos";
+            if (semver.lt(version, "1.0.30")) {
+                return "macos";
+            }
+
+            const osver = parseInt(platformInfo.version.split(".")[0]);
+            if (osver < 14 || semver.lt(version, "1.0.35")) {
+                return "macos-12";
+            }
+
+            return "macos-14";
         case "linux":
             return semver.gte(version, "1.0.35") ? "ubuntu-20.04" : "ubuntu";
         case "win32":
             return "windows";
         default:
-            throw new Error("unrecognised platform: " + nodePlatform);
+            throw new Error("unrecognised platform: " + platformInfo.platform);
     }
 }
 
 async function install() {
     try {
         const version = core.getInput("wabt-version");
-        const nodePlatform = process.platform;
-        const [archiveDirectory, archiveUrl] = findArchive({version, nodePlatform});
+        const platformInfo = await platform.getDetails();
+        const [archiveDirectory, archiveUrl] = findArchive({version, platformInfo});
         core.info(`Download from ${archiveUrl}`);
         const archivePath = await toolCache.downloadTool(archiveUrl);
         const tempDir = await toolCache.extractTar(archivePath, undefined, "xz");
@@ -47,7 +57,6 @@ async function install() {
 }
 
 install();
-
 
 
 /***/ }),
@@ -450,6 +459,25 @@ exports.toCommandValue = toCommandValue;
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -459,14 +487,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-    result["default"] = mod;
-    return result;
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getExecOutput = exports.exec = void 0;
+const string_decoder_1 = __webpack_require__(4304);
 const tr = __importStar(__webpack_require__(8159));
 /**
  * Exec a command.
@@ -492,6 +515,51 @@ function exec(commandLine, args, options) {
     });
 }
 exports.exec = exec;
+/**
+ * Exec a command and get the output.
+ * Output will be streamed to the live console.
+ * Returns promise with the exit code and collected stdout and stderr
+ *
+ * @param     commandLine           command to execute (can include additional args). Must be correctly escaped.
+ * @param     args                  optional arguments for tool. Escaping is handled by the lib.
+ * @param     options               optional exec options.  See ExecOptions
+ * @returns   Promise<ExecOutput>   exit code, stdout, and stderr
+ */
+function getExecOutput(commandLine, args, options) {
+    var _a, _b;
+    return __awaiter(this, void 0, void 0, function* () {
+        let stdout = '';
+        let stderr = '';
+        //Using string decoder covers the case where a mult-byte character is split
+        const stdoutDecoder = new string_decoder_1.StringDecoder('utf8');
+        const stderrDecoder = new string_decoder_1.StringDecoder('utf8');
+        const originalStdoutListener = (_a = options === null || options === void 0 ? void 0 : options.listeners) === null || _a === void 0 ? void 0 : _a.stdout;
+        const originalStdErrListener = (_b = options === null || options === void 0 ? void 0 : options.listeners) === null || _b === void 0 ? void 0 : _b.stderr;
+        const stdErrListener = (data) => {
+            stderr += stderrDecoder.write(data);
+            if (originalStdErrListener) {
+                originalStdErrListener(data);
+            }
+        };
+        const stdOutListener = (data) => {
+            stdout += stdoutDecoder.write(data);
+            if (originalStdoutListener) {
+                originalStdoutListener(data);
+            }
+        };
+        const listeners = Object.assign(Object.assign({}, options === null || options === void 0 ? void 0 : options.listeners), { stdout: stdOutListener, stderr: stdErrListener });
+        const exitCode = yield exec(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
+        //flush any remaining characters
+        stdout += stdoutDecoder.end();
+        stderr += stderrDecoder.end();
+        return {
+            exitCode,
+            stdout,
+            stderr
+        };
+    });
+}
+exports.getExecOutput = getExecOutput;
 //# sourceMappingURL=exec.js.map
 
 /***/ }),
@@ -501,6 +569,25 @@ exports.exec = exec;
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -510,20 +597,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-    result["default"] = mod;
-    return result;
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.argStringToArray = exports.ToolRunner = void 0;
 const os = __importStar(__webpack_require__(2087));
 const events = __importStar(__webpack_require__(8614));
 const child = __importStar(__webpack_require__(3129));
 const path = __importStar(__webpack_require__(5622));
 const io = __importStar(__webpack_require__(7436));
 const ioUtil = __importStar(__webpack_require__(1962));
+const timers_1 = __webpack_require__(8213);
 /* eslint-disable @typescript-eslint/unbound-method */
 const IS_WINDOWS = process.platform === 'win32';
 /*
@@ -593,11 +675,12 @@ class ToolRunner extends events.EventEmitter {
                 s = s.substring(n + os.EOL.length);
                 n = s.indexOf(os.EOL);
             }
-            strBuffer = s;
+            return s;
         }
         catch (err) {
             // streaming lines to console is best effort.  Don't fail a build.
             this._debug(`error processing line. Failed with error ${err}`);
+            return '';
         }
     }
     _getSpawnFileName() {
@@ -879,7 +962,7 @@ class ToolRunner extends events.EventEmitter {
             // if the tool is only a file name, then resolve it from the PATH
             // otherwise verify it exists (add extension on Windows if necessary)
             this.toolPath = yield io.which(this.toolPath, true);
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
                 this._debug(`exec tool: ${this.toolPath}`);
                 this._debug('arguments:');
                 for (const arg of this.args) {
@@ -893,9 +976,12 @@ class ToolRunner extends events.EventEmitter {
                 state.on('debug', (message) => {
                     this._debug(message);
                 });
+                if (this.options.cwd && !(yield ioUtil.exists(this.options.cwd))) {
+                    return reject(new Error(`The cwd: ${this.options.cwd} does not exist!`));
+                }
                 const fileName = this._getSpawnFileName();
                 const cp = child.spawn(fileName, this._getSpawnArgs(optionsNonNull), this._getSpawnOptions(this.options, fileName));
-                const stdbuffer = '';
+                let stdbuffer = '';
                 if (cp.stdout) {
                     cp.stdout.on('data', (data) => {
                         if (this.options.listeners && this.options.listeners.stdout) {
@@ -904,14 +990,14 @@ class ToolRunner extends events.EventEmitter {
                         if (!optionsNonNull.silent && optionsNonNull.outStream) {
                             optionsNonNull.outStream.write(data);
                         }
-                        this._processLineBuffer(data, stdbuffer, (line) => {
+                        stdbuffer = this._processLineBuffer(data, stdbuffer, (line) => {
                             if (this.options.listeners && this.options.listeners.stdline) {
                                 this.options.listeners.stdline(line);
                             }
                         });
                     });
                 }
-                const errbuffer = '';
+                let errbuffer = '';
                 if (cp.stderr) {
                     cp.stderr.on('data', (data) => {
                         state.processStderr = true;
@@ -926,7 +1012,7 @@ class ToolRunner extends events.EventEmitter {
                                 : optionsNonNull.outStream;
                             s.write(data);
                         }
-                        this._processLineBuffer(data, errbuffer, (line) => {
+                        errbuffer = this._processLineBuffer(data, errbuffer, (line) => {
                             if (this.options.listeners && this.options.listeners.errline) {
                                 this.options.listeners.errline(line);
                             }
@@ -973,7 +1059,7 @@ class ToolRunner extends events.EventEmitter {
                     }
                     cp.stdin.end(this.options.input);
                 }
-            });
+            }));
         });
     }
 }
@@ -1059,7 +1145,7 @@ class ExecState extends events.EventEmitter {
             this._setResult();
         }
         else if (this.processExited) {
-            this.timeout = setTimeout(ExecState.HandleTimeout, this.delay, this);
+            this.timeout = timers_1.setTimeout(ExecState.HandleTimeout, this.delay, this);
         }
     }
     _debug(message) {
@@ -8127,6 +8213,107 @@ try {
 
 /***/ }),
 
+/***/ 3492:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "platform": () => /* binding */ platform,
+/* harmony export */   "arch": () => /* binding */ arch,
+/* harmony export */   "isWindows": () => /* binding */ isWindows,
+/* harmony export */   "isMacOS": () => /* binding */ isMacOS,
+/* harmony export */   "isLinux": () => /* binding */ isLinux,
+/* harmony export */   "getDetails": () => /* binding */ getDetails
+/* harmony export */ });
+/* harmony import */ var os__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2087);
+/* harmony import */ var os__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(os__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _actions_exec__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(1514);
+/* harmony import */ var _actions_exec__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_actions_exec__WEBPACK_IMPORTED_MODULE_1__);
+// From https://github.com/actions/toolkit/blob/f003268b3250d192cf66f306694b34a278011d9b/packages/core/src/platform.ts.
+//
+// Copied because it is not released yet. Converted from TypeScript.
+//
+// Copyright 2019 GitHub
+// License: MIT
+
+
+
+
+const getWindowsInfo = async () => {
+  const {stdout: version} = await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
+    'powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Version"',
+    undefined,
+    {
+      silent: true
+    }
+  )
+
+  const {stdout: name} = await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
+    'powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Caption"',
+    undefined,
+    {
+      silent: true
+    }
+  )
+
+  return {
+    name: name.trim(),
+    version: version.trim()
+  }
+}
+
+const getMacOsInfo = async () => {
+  const {stdout} = await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput('sw_vers', undefined, {
+    silent: true
+  })
+
+  const version = stdout.match(/ProductVersion:\s*(.+)/)?.[1] ?? ''
+  const name = stdout.match(/ProductName:\s*(.+)/)?.[1] ?? ''
+
+  return {
+    name,
+    version
+  }
+}
+
+const getLinuxInfo = async () => {
+  const {stdout} = await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput('lsb_release', ['-i', '-r', '-s'], {
+    silent: true
+  })
+
+  const [name, version] = stdout.trim().split('\n')
+
+  return {
+    name,
+    version
+  }
+}
+
+const platform = os__WEBPACK_IMPORTED_MODULE_0___default().platform()
+const arch = os__WEBPACK_IMPORTED_MODULE_0___default().arch()
+const isWindows = platform === 'win32'
+const isMacOS = platform === 'darwin'
+const isLinux = platform === 'linux'
+
+async function getDetails() {
+  return {
+    ...(await (isWindows
+      ? getWindowsInfo()
+      : isMacOS
+      ? getMacOsInfo()
+      : getLinuxInfo())),
+    platform,
+    arch,
+    isWindows,
+    isMacOS,
+    isLinux
+  }
+}
+
+
+/***/ }),
+
 /***/ 2357:
 /***/ ((module) => {
 
@@ -8215,6 +8402,22 @@ module.exports = require("stream");;
 
 /***/ }),
 
+/***/ 4304:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("string_decoder");;
+
+/***/ }),
+
+/***/ 8213:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("timers");;
+
+/***/ }),
+
 /***/ 4016:
 /***/ ((module) => {
 
@@ -8263,6 +8466,46 @@ module.exports = require("util");;
 /******/ 	}
 /******/ 	
 /************************************************************************/
+/******/ 	/* webpack/runtime/compat get default export */
+/******/ 	(() => {
+/******/ 		// getDefaultExport function for compatibility with non-harmony modules
+/******/ 		__webpack_require__.n = (module) => {
+/******/ 			var getter = module && module.__esModule ?
+/******/ 				() => module['default'] :
+/******/ 				() => module;
+/******/ 			__webpack_require__.d(getter, { a: getter });
+/******/ 			return getter;
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/define property getters */
+/******/ 	(() => {
+/******/ 		// define getter functions for harmony exports
+/******/ 		__webpack_require__.d = (exports, definition) => {
+/******/ 			for(var key in definition) {
+/******/ 				if(__webpack_require__.o(definition, key) && !__webpack_require__.o(exports, key)) {
+/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 				}
+/******/ 			}
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
+/******/ 	(() => {
+/******/ 		__webpack_require__.o = (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop)
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/make namespace object */
+/******/ 	(() => {
+/******/ 		// define __esModule on exports
+/******/ 		__webpack_require__.r = (exports) => {
+/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 			}
+/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 		};
+/******/ 	})();
+/******/ 	
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	__webpack_require__.ab = __dirname + "/";/************************************************************************/
