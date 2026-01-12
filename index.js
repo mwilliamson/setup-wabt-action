@@ -14,7 +14,15 @@ function findArchive({version, nodePlatform, nodeArch}) {
 function nodePlatformToWabtPlatform({nodeArch, nodePlatform, version}) {
     switch (nodePlatform) {
         case "darwin":
-            return semver.gte(version, "1.0.30") ? "macos-12" : "macos";
+            switch (nodeArch) {
+                case "arm64":
+                    return "macos-arm64";
+                case "x64":
+                    return semver.gte(version, "1.0.30") ? "macos-12" : "macos";
+                default:
+                    throw new Error("unrecognised arch: " + nodeArch);
+            }
+
         case "linux":
             switch (nodeArch) {
                 case "arm64":
@@ -33,6 +41,7 @@ function nodePlatformToWabtPlatform({nodeArch, nodePlatform, version}) {
 
         case "win32":
             return semver.gte(version, "1.0.39") ? "windows-x64" : "windows";
+
         default:
             throw new Error("unrecognised platform: " + nodePlatform);
     }
