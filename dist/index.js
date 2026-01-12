@@ -23,9 +23,15 @@ function nodePlatformToWabtPlatform({nodePlatform, version}) {
         case "darwin":
             return semver.gte(version, "1.0.30") ? "macos-12" : "macos";
         case "linux":
-            return semver.gte(version, "1.0.35") ? "ubuntu-20.04" : "ubuntu";
+            if (semver.gte(version, "1.0.39")) {
+                return "linux-x64";
+            } else if (semver.gte(version, "1.0.35")) {
+                return "ubuntu-20.04";
+            } else {
+                return "ubuntu";
+            }
         case "win32":
-            return "windows";
+            return semver.gte(version, "1.0.39") ? "windows-x64" : "windows";
         default:
             throw new Error("unrecognised platform: " + nodePlatform);
     }
