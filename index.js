@@ -4,25 +4,33 @@ const core = require("@actions/core");
 const toolCache = require("@actions/tool-cache");
 const semver = require("semver");
 
-function findArchive({version, nodePlatform}) {
-    const wabtPlatform = nodePlatformToWabtPlatform({nodePlatform, version});
+function findArchive({version, nodePlatform, nodeArch}) {
+    const wabtPlatform = nodePlatformToWabtPlatform({nodeArch, nodePlatform, version});
     const directoryName = `wabt-${version}`;
 
     return [directoryName, `https://github.com/WebAssembly/wabt/releases/download/${version}/${directoryName}-${wabtPlatform}.tar.gz`]
 }
 
-function nodePlatformToWabtPlatform({nodePlatform, version}) {
+function nodePlatformToWabtPlatform({nodeArch, nodePlatform, version}) {
     switch (nodePlatform) {
         case "darwin":
             return semver.gte(version, "1.0.30") ? "macos-12" : "macos";
         case "linux":
-            if (semver.gte(version, "1.0.39")) {
-                return "linux-x64";
-            } else if (semver.gte(version, "1.0.35")) {
-                return "ubuntu-20.04";
-            } else {
-                return "ubuntu";
+            switch (nodeArch) {
+                case "arm64":
+                    return "linux-arm64";
+                case "x64":
+                    if (semver.gte(version, "1.0.39")) {
+                        return "linux-x64";
+                    } else if (semver.gte(version, "1.0.35")) {
+                        return "ubuntu-20.04";
+                    } else {
+                        return "ubuntu";
+                    }
+                default:
+                    throw new Error("unrecognised arch: " + nodeArch);
             }
+
         case "win32":
             return semver.gte(version, "1.0.39") ? "windows-x64" : "windows";
         default:
@@ -34,7 +42,8 @@ async function install() {
     try {
         const version = core.getInput("wabt-version");
         const nodePlatform = process.platform;
-        const [archiveDirectory, archiveUrl] = findArchive({version, nodePlatform});
+        const nodeArch = process.arch;
+        const [archiveDirectory, archiveUrl] = findArchive({version, nodePlatform, nodeArch});
         core.info(`Download from ${archiveUrl}`);
         const archivePath = await toolCache.downloadTool(archiveUrl);
         const tempDir = await toolCache.extractTar(archivePath, undefined, "xz");
